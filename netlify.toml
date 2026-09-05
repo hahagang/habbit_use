@@ -1,6 +1,3 @@
 [build]
-command = "npm run build:netlify"
-publish = "netlify-dist"
-
-[build.environment]
-NODE_VERSION = "22"
+base = "netlify-site"
+publish = "."

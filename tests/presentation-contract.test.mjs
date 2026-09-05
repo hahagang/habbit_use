@@ -170,7 +170,7 @@ test('netlify static build emits a deployable habit tracker page', () => {
   });
 
   const html = readFileSync(
-    new URL('../netlify-dist/index.html', import.meta.url),
+    new URL('../netlify-site/index.html', import.meta.url),
     'utf8',
   );
 
