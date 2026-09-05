@@ -1,0 +1,1143 @@
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+
+const outputDir = new URL('../netlify-dist/', import.meta.url);
+
+const html = String.raw`<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>好习惯｜一天一点，慢慢变好</title>
+    <meta
+      name="description"
+      content="一个简单、安静的每日习惯打卡工具，把想坚持的小事一件件完成。"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --background: #080b10;
+        --foreground: #eefcf6;
+        --card: #101820;
+        --primary: #23f2a9;
+        --primary-foreground: #03120d;
+        --secondary: #17242c;
+        --muted-foreground: #9ab0aa;
+        --destructive: #ff5f72;
+        --border: #263642;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background:
+          linear-gradient(115deg, #080b10 0%, #0b1219 46%, #100f1e 100%),
+          var(--background);
+        color: var(--foreground);
+        font-family:
+          "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      body::before,
+      body::after {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        content: "";
+      }
+
+      body::before {
+        background:
+          linear-gradient(90deg, rgba(35, 242, 169, 0.08) 1px, transparent 1px),
+          linear-gradient(rgba(139, 92, 246, 0.08) 1px, transparent 1px);
+        background-size: 76px 76px;
+        mask-image: linear-gradient(to bottom, black 0%, transparent 76%);
+      }
+
+      body::after {
+        background:
+          linear-gradient(128deg, transparent 0 33%, rgba(35, 242, 169, 0.14) 33.4%, transparent 34%),
+          linear-gradient(144deg, transparent 0 66%, rgba(139, 92, 246, 0.12) 66.35%, transparent 67%),
+          repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 8px);
+        opacity: 0.74;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      button:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 3px;
+      }
+
+      .app-shell {
+        width: min(100%, 1160px);
+        margin-inline: auto;
+        padding: 0 48px 56px;
+      }
+
+      .app-header {
+        display: flex;
+        min-height: 112px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        border-bottom: 1px solid rgba(35, 242, 169, 0.18);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 40px;
+        height: 40px;
+        place-items: center;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #23f2a9, #85ffcb 52%, #38bdf8);
+        color: #03120d;
+        box-shadow:
+          0 0 0 1px rgba(35, 242, 169, 0.34),
+          0 0 28px rgba(35, 242, 169, 0.24);
+      }
+
+      .brand-title {
+        margin: 0;
+        color: #f5fffb;
+        font-size: 1.0625rem;
+        font-weight: 650;
+      }
+
+      .brand-subtitle,
+      .date-label,
+      .muted {
+        color: var(--muted-foreground);
+      }
+
+      .brand-subtitle {
+        margin: 2px 0 0;
+        font-size: 0.8125rem;
+      }
+
+      .date-label {
+        margin: 0;
+        font-size: 0.875rem;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+        align-items: start;
+        gap: 56px;
+        padding-top: 54px;
+      }
+
+      .daily-overview {
+        padding-top: 8px;
+      }
+
+      .section-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        color: var(--primary);
+        font-size: 0.875rem;
+        font-weight: 550;
+        text-shadow: 0 0 22px rgba(35, 242, 169, 0.32);
+      }
+
+      .section-kicker::before {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--primary);
+        box-shadow: 0 0 18px rgba(35, 242, 169, 0.9);
+        content: "";
+      }
+
+      h1 {
+        margin: 18px 0 0;
+        color: #f5fffb;
+        font-size: 2.25rem;
+        font-weight: 760;
+        line-height: 1.35;
+      }
+
+      .overview-description {
+        max-width: 285px;
+        margin: 16px 0 0;
+        color: #a9c5bd;
+        font-size: 0.875rem;
+        line-height: 1.9;
+      }
+
+      .card {
+        overflow: hidden;
+        border-radius: 8px;
+        backdrop-filter: blur(18px);
+      }
+
+      .daily-progress {
+        margin-top: 36px;
+        padding: 24px;
+        border: 1px solid rgba(35, 242, 169, 0.24);
+        background:
+          linear-gradient(145deg, rgba(35, 242, 169, 0.12), transparent 34%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025)),
+          rgba(16, 24, 32, 0.86);
+        box-shadow:
+          0 22px 80px -42px rgba(35, 242, 169, 0.76),
+          inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      }
+
+      .progress-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .progress-label {
+        margin: 0;
+        color: var(--muted-foreground);
+        font-size: 0.875rem;
+      }
+
+      .progress-count {
+        margin: 8px 0 0;
+        color: #f5fffb;
+        font-size: 3.75rem;
+        font-weight: 780;
+        line-height: 1;
+        text-shadow: 0 0 34px rgba(35, 242, 169, 0.42);
+      }
+
+      .progress-total {
+        color: var(--muted-foreground);
+        font-size: 1rem;
+      }
+
+      .stat-mark {
+        display: grid;
+        width: 40px;
+        height: 40px;
+        place-items: center;
+        border: 1px solid rgba(35, 242, 169, 0.46);
+        border-radius: 999px;
+        background: linear-gradient(135deg, rgba(35, 242, 169, 0.98), rgba(56, 189, 248, 0.72));
+        color: #03120d;
+        box-shadow:
+          0 0 28px rgba(35, 242, 169, 0.38),
+          inset 0 1px 0 rgba(255, 255, 255, 0.46);
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 6px;
+        margin-top: 20px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--secondary);
+      }
+
+      .progress-bar span {
+        display: block;
+        width: var(--progress, 0%);
+        height: 100%;
+        border-radius: inherit;
+        background: var(--primary);
+        transition: width 180ms ease;
+      }
+
+      .status-copy {
+        margin: 16px 0 0;
+        color: var(--muted-foreground);
+        font-size: 0.875rem;
+        line-height: 1.65;
+      }
+
+      .history-summary {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      .history-stat {
+        display: flex;
+        min-height: 44px;
+        align-items: center;
+        gap: 7px;
+        padding: 10px;
+        border: 1px solid rgba(154, 176, 170, 0.18);
+        border-radius: 8px;
+        background: rgba(8, 11, 16, 0.35);
+        color: #a9c5bd;
+        font-size: 0.8125rem;
+      }
+
+      .history-stat strong {
+        color: #f5fffb;
+        font-size: 1.125rem;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .history-strip {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 8px;
+        margin: 16px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .history-day {
+        display: grid;
+        min-width: 0;
+        justify-items: center;
+        gap: 8px;
+      }
+
+      .history-day-label {
+        max-width: 100%;
+        overflow: hidden;
+        color: #78918a;
+        font-size: 0.75rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .history-day-dot {
+        display: block;
+        width: 100%;
+        min-width: 20px;
+        height: 10px;
+        border: 1px solid rgba(154, 176, 170, 0.24);
+        border-radius: 999px;
+        background: rgba(154, 176, 170, 0.14);
+      }
+
+      .history-day-dot[data-state="partial"] {
+        border-color: rgba(245, 158, 11, 0.46);
+        background: rgba(245, 158, 11, 0.45);
+      }
+
+      .history-day-dot[data-state="complete"] {
+        border-color: rgba(35, 242, 169, 0.72);
+        background: linear-gradient(90deg, #23f2a9, #38bdf8);
+        box-shadow: 0 0 16px rgba(35, 242, 169, 0.28);
+      }
+
+      .habit-panel {
+        border: 1px solid rgba(154, 176, 170, 0.22);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.032)),
+          rgba(9, 14, 20, 0.78);
+        box-shadow:
+          0 30px 120px -52px rgba(0, 0, 0, 0.92),
+          0 0 0 1px rgba(255, 255, 255, 0.03),
+          inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      }
+
+      .panel-content {
+        padding: 32px;
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .panel-kicker {
+        margin: 0;
+        color: var(--muted-foreground);
+        font-size: 0.875rem;
+        font-weight: 550;
+      }
+
+      h2 {
+        margin: 4px 0 0;
+        color: #f5fffb;
+        font-size: 1.5rem;
+      }
+
+      .habit-count {
+        color: var(--muted-foreground);
+        font-size: 0.875rem;
+      }
+
+      .add-form {
+        margin-top: 24px;
+      }
+
+      .add-row {
+        display: flex;
+        gap: 10px;
+      }
+
+      .habit-input {
+        min-width: 0;
+        flex: 1;
+        height: 48px;
+        border: 1px solid rgba(154, 176, 170, 0.28);
+        border-radius: 8px;
+        background: rgba(8, 11, 16, 0.68);
+        color: #eefcf6;
+        padding: 0 14px;
+        font-size: 1rem;
+      }
+
+      .habit-input::placeholder {
+        color: var(--muted-foreground);
+      }
+
+      .primary-button {
+        display: inline-flex;
+        min-width: 74px;
+        height: 48px;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 1px solid rgba(35, 242, 169, 0.48);
+        border-radius: 8px;
+        background: linear-gradient(135deg, #23f2a9, #38bdf8);
+        color: #03120d;
+        font-size: 0.875rem;
+        font-weight: 650;
+      }
+
+      .error,
+      .storage-warning {
+        display: none;
+        margin: 10px 0 0;
+        color: var(--destructive);
+        font-size: 0.875rem;
+      }
+
+      .storage-warning {
+        padding: 12px 14px;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        border-radius: 8px;
+        background: rgba(245, 158, 11, 0.12);
+        color: #ffe7b8;
+      }
+
+      .habit-list,
+      .empty-habits {
+        margin-top: 24px;
+        border-top: 1px solid rgba(154, 176, 170, 0.2);
+      }
+
+      .habit-list {
+        padding: 0;
+        list-style: none;
+      }
+
+      .empty-habits {
+        display: grid;
+        min-height: 304px;
+        place-items: center;
+        padding: 40px 24px;
+        text-align: center;
+      }
+
+      .empty-symbol {
+        display: grid;
+        width: 56px;
+        height: 56px;
+        margin-inline: auto;
+        place-items: center;
+        border: 1px solid rgba(35, 242, 169, 0.32);
+        border-radius: 16px;
+        background: rgba(35, 242, 169, 0.1);
+        color: var(--primary);
+      }
+
+      .empty-habits h3 {
+        margin: 16px 0 0;
+        font-size: 1rem;
+      }
+
+      .empty-habits p {
+        max-width: 260px;
+        margin: 4px auto 0;
+        color: var(--muted-foreground);
+        font-size: 0.875rem;
+        line-height: 1.7;
+      }
+
+      .habit-row {
+        display: grid;
+        grid-template-columns: 32px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 12px;
+        min-height: 72px;
+        padding: 16px 10px;
+        border-bottom: 1px solid rgba(154, 176, 170, 0.16);
+      }
+
+      .habit-row[data-completed="true"] {
+        background: linear-gradient(90deg, rgba(35, 242, 169, 0.12), rgba(35, 242, 169, 0.02) 58%, transparent);
+      }
+
+      .habit-checkbox {
+        width: 24px;
+        height: 24px;
+        accent-color: var(--primary);
+      }
+
+      .habit-name {
+        min-width: 0;
+        overflow: hidden;
+        font-size: 0.9375rem;
+        font-weight: 550;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .habit-row[data-completed="true"] .habit-name {
+        color: var(--muted-foreground);
+        text-decoration: line-through;
+        text-decoration-color: rgba(35, 242, 169, 0.45);
+      }
+
+      .row-actions {
+        display: flex;
+        gap: 2px;
+      }
+
+      .icon-button {
+        display: grid;
+        width: 40px;
+        height: 40px;
+        place-items: center;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--muted-foreground);
+      }
+
+      .icon-button:hover {
+        background: var(--secondary);
+        color: var(--foreground);
+      }
+
+      .edit-input {
+        width: 100%;
+        min-width: 0;
+        height: 40px;
+        border: 1px solid rgba(154, 176, 170, 0.28);
+        border-radius: 8px;
+        background: rgba(8, 11, 16, 0.68);
+        color: #eefcf6;
+        padding: 0 12px;
+      }
+
+      .privacy-note {
+        margin-top: 20px;
+        color: #78918a;
+        font-size: 0.8125rem;
+        line-height: 1.8;
+        text-align: center;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+      }
+
+      @media (min-width: 1000px) {
+        .daily-overview {
+          position: sticky;
+          top: 32px;
+        }
+      }
+
+      @media (max-width: 900px) {
+        .app-shell {
+          padding-inline: 28px;
+        }
+
+        .workspace {
+          grid-template-columns: minmax(0, 255px) minmax(0, 1fr);
+          gap: 28px;
+        }
+
+        h1 {
+          font-size: 1.95rem;
+        }
+
+        .panel-content {
+          padding: 24px;
+        }
+      }
+
+      @media (max-width: 700px) {
+        .app-shell {
+          padding: 0 20px 32px;
+        }
+
+        .app-header {
+          min-height: 92px;
+          gap: 12px;
+        }
+
+        .date-label {
+          max-width: 120px;
+          line-height: 1.7;
+          text-align: right;
+        }
+
+        .workspace {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 28px;
+          padding-top: 28px;
+        }
+
+        .daily-overview {
+          padding-top: 0;
+        }
+
+        h1 {
+          margin-top: 10px;
+          font-size: 1.75rem;
+          line-height: 1.42;
+        }
+
+        .overview-description {
+          max-width: none;
+          margin-top: 10px;
+        }
+
+        .daily-progress {
+          margin-top: 24px;
+        }
+
+        .panel-content {
+          padding: 24px 20px;
+        }
+
+        .empty-habits {
+          min-height: 250px;
+        }
+
+        .habit-row {
+          padding-inline: 0;
+        }
+      }
+
+      @media (max-width: 380px) {
+        .app-shell {
+          padding-inline: 12px;
+        }
+
+        .panel-content {
+          padding-inline: 14px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="app-shell">
+        <header class="app-header">
+          <div class="brand">
+            <div class="brand-mark" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M11 20A7 7 0 0 1 4 13c0-4.5 4-8 9-9 0 2 1 4 3 6s3 4 3 6a6 6 0 0 1-6 6Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M9 14c2-1 4-3 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div>
+              <p class="brand-title">好习惯</p>
+              <p class="brand-subtitle">一天一点，慢慢变好</p>
+            </div>
+          </div>
+          <p class="date-label" id="dateLabel"></p>
+        </header>
+
+        <div class="workspace">
+          <section class="daily-overview">
+            <p class="section-kicker">今天，也在认真生活</p>
+            <h1>把想坚持的小事，<br />一件件完成。</h1>
+            <p class="overview-description">不用追求完美，只要今天比昨天多走一小步。</p>
+
+            <section class="card daily-progress" aria-label="今日进度">
+              <div class="progress-head">
+                <div>
+                  <p class="progress-label">今日完成</p>
+                  <p class="progress-count"><span id="completedCount">0</span><span class="progress-total"> / <span id="totalCount">0</span> 项</span></p>
+                </div>
+                <div class="stat-mark" aria-hidden="true">✓</div>
+              </div>
+              <div class="progress-bar" aria-label="今日完成进度">
+                <span id="progressIndicator"></span>
+              </div>
+              <p class="status-copy" id="statusCopy" aria-live="polite"></p>
+              <div class="history-summary" id="historySummary"></div>
+              <ol class="history-strip" id="historyStrip" aria-label="最近 7 天完成概览"></ol>
+            </section>
+          </section>
+
+          <section aria-labelledby="habit-list-title">
+            <section class="card habit-panel">
+              <div class="panel-content">
+                <div class="panel-head">
+                  <div>
+                    <p class="panel-kicker">Today</p>
+                    <h2 id="habit-list-title">今日习惯</h2>
+                  </div>
+                  <span class="habit-count" id="habitCount">0 个习惯</span>
+                </div>
+
+                <form class="add-form" id="addForm" novalidate>
+                  <div class="add-row">
+                    <input
+                      class="habit-input"
+                      id="newHabitName"
+                      maxlength="31"
+                      placeholder="例如：喝水、运动、读书"
+                      aria-label="新的习惯名称"
+                    />
+                    <button class="primary-button" type="submit">+ 添加</button>
+                  </div>
+                  <p class="error" id="newHabitError" role="alert"></p>
+                </form>
+
+                <output class="storage-warning" id="storageWarning" aria-live="polite"></output>
+                <div id="habitSurface"></div>
+              </div>
+            </section>
+
+            <p class="privacy-note">数据只保存在当前浏览器 · 每天自动记录历史</p>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const STORAGE_KEY = "good-habits:v1";
+      const MAX_NAME_LENGTH = 30;
+      const elements = {
+        addForm: document.querySelector("#addForm"),
+        completedCount: document.querySelector("#completedCount"),
+        dateLabel: document.querySelector("#dateLabel"),
+        habitCount: document.querySelector("#habitCount"),
+        habitSurface: document.querySelector("#habitSurface"),
+        historyStrip: document.querySelector("#historyStrip"),
+        historySummary: document.querySelector("#historySummary"),
+        newHabitError: document.querySelector("#newHabitError"),
+        newHabitName: document.querySelector("#newHabitName"),
+        progressIndicator: document.querySelector("#progressIndicator"),
+        statusCopy: document.querySelector("#statusCopy"),
+        storageWarning: document.querySelector("#storageWarning"),
+        totalCount: document.querySelector("#totalCount"),
+      };
+
+      let todayKey = getLocalDateKey();
+      let store = readStore();
+      let editingId = null;
+
+      function getLocalDateKey(date = new Date()) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return year + "-" + month + "-" + day;
+      }
+
+      function getDateFromKey(dateKey) {
+        const [year, month, day] = dateKey.split("-");
+        return new Date(Number(year), Number(month) - 1, Number(day));
+      }
+
+      function createEmptyStore() {
+        return { version: 2, habits: [], history: {} };
+      }
+
+      function normalizeName(name) {
+        return name.trim().toLocaleLowerCase("zh-CN");
+      }
+
+      function normalizeIds(ids, validHabitIds) {
+        return [...new Set(ids.filter((id) => validHabitIds.has(id)))];
+      }
+
+      function normalizeStore(value) {
+        if (value?.version === 2 && Array.isArray(value.habits) && value.history && typeof value.history === "object") {
+          const validHabitIds = new Set(value.habits.map((habit) => habit.id));
+          return {
+            version: 2,
+            habits: value.habits.filter(isHabit),
+            history: Object.fromEntries(
+              Object.entries(value.history)
+                .filter(([dateKey, ids]) => /^\d{4}-\d{2}-\d{2}$/.test(dateKey) && Array.isArray(ids))
+                .map(([dateKey, ids]) => [dateKey, normalizeIds(ids, validHabitIds)]),
+            ),
+          };
+        }
+
+        if (value?.version === 1 && Array.isArray(value.habits) && Array.isArray(value.completedHabitIds)) {
+          const habits = value.habits.filter(isHabit);
+          const validHabitIds = new Set(habits.map((habit) => habit.id));
+          return {
+            version: 2,
+            habits,
+            history: /^\d{4}-\d{2}-\d{2}$/.test(value.completionDate)
+              ? { [value.completionDate]: normalizeIds(value.completedHabitIds, validHabitIds) }
+              : {},
+          };
+        }
+
+        return createEmptyStore();
+      }
+
+      function isHabit(value) {
+        return value && typeof value.id === "string" && typeof value.name === "string" && typeof value.createdAt === "string";
+      }
+
+      function readStore() {
+        try {
+          const savedValue = localStorage.getItem(STORAGE_KEY);
+          return savedValue ? normalizeStore(JSON.parse(savedValue)) : createEmptyStore();
+        } catch {
+          showStorageWarning("本地数据无法读取，已为你开启一个新的列表。");
+          return createEmptyStore();
+        }
+      }
+
+      function saveStore() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+        } catch {
+          showStorageWarning("当前更改暂时只能保留在本页，刷新后可能会丢失。");
+        }
+      }
+
+      function showStorageWarning(message) {
+        elements.storageWarning.textContent = message;
+        elements.storageWarning.style.display = "block";
+      }
+
+      function getNameError(name, excludedId) {
+        const trimmedName = name.trim();
+        if (!trimmedName) return "请输入习惯名称";
+        if (trimmedName.length > MAX_NAME_LENGTH) return "习惯名称不能超过 " + MAX_NAME_LENGTH + " 个字符";
+        const normalizedName = normalizeName(trimmedName);
+        return store.habits.some((habit) => habit.id !== excludedId && normalizeName(habit.name) === normalizedName)
+          ? "这个习惯已经在列表里了"
+          : "";
+      }
+
+      function makeHabitId() {
+        return crypto?.randomUUID?.() ?? "habit-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+      }
+
+      function getCompletedIds(dateKey) {
+        return store.history[dateKey] ?? [];
+      }
+
+      function getHabitStartDateKey(habit) {
+        const createdAt = new Date(habit.createdAt);
+        if (!Number.isNaN(createdAt.getTime())) return getLocalDateKey(createdAt);
+        return /^\d{4}-\d{2}-\d{2}$/.test(habit.createdAt.slice(0, 10)) ? habit.createdAt.slice(0, 10) : "0000-01-01";
+      }
+
+      function getOverview(dateKey) {
+        const habitsForDate = store.habits.filter((habit) => getHabitStartDateKey(habit) <= dateKey);
+        const completedIds = new Set(getCompletedIds(dateKey));
+        const completedCount = habitsForDate.filter((habit) => completedIds.has(habit.id)).length;
+        const totalCount = habitsForDate.length;
+        return {
+          dateKey,
+          completedCount,
+          totalCount,
+          state: totalCount > 0 && completedCount === totalCount ? "complete" : completedCount > 0 ? "partial" : "empty",
+        };
+      }
+
+      function getRecentDateKeys(days = 7) {
+        const today = getDateFromKey(todayKey);
+        return Array.from({ length: days }, (_, index) => {
+          const date = new Date(today);
+          date.setDate(today.getDate() - (days - 1 - index));
+          return getLocalDateKey(date);
+        });
+      }
+
+      function getCurrentStreak() {
+        let streak = 0;
+        const cursor = getDateFromKey(todayKey);
+
+        while (true) {
+          if (getOverview(getLocalDateKey(cursor)).state !== "complete") return streak;
+          streak += 1;
+          cursor.setDate(cursor.getDate() - 1);
+        }
+      }
+
+      function getHistoryDayLabel(dateKey) {
+        if (dateKey === todayKey) return "今天";
+        const yesterday = getDateFromKey(todayKey);
+        yesterday.setDate(yesterday.getDate() - 1);
+        if (dateKey === getLocalDateKey(yesterday)) return "昨天";
+        return new Intl.DateTimeFormat("zh-CN", { weekday: "short" }).format(getDateFromKey(dateKey));
+      }
+
+      function refreshToday() {
+        todayKey = getLocalDateKey();
+      }
+
+      function render() {
+        refreshToday();
+        const completedIds = new Set(getCompletedIds(todayKey));
+        const completedCount = store.habits.filter((habit) => completedIds.has(habit.id)).length;
+        const totalCount = store.habits.length;
+        const allDone = totalCount > 0 && completedCount === totalCount;
+        const completionPercent = totalCount ? Math.round((completedCount / totalCount) * 100) : 0;
+        const recentOverview = getRecentDateKeys().map(getOverview);
+        const completedDays = recentOverview.filter((day) => day.state === "complete").length;
+        const streak = getCurrentStreak();
+
+        elements.dateLabel.textContent = new Intl.DateTimeFormat("zh-CN", {
+          month: "long",
+          day: "numeric",
+          weekday: "long",
+        }).format(getDateFromKey(todayKey));
+        elements.completedCount.textContent = completedCount;
+        elements.totalCount.textContent = totalCount;
+        elements.habitCount.textContent = totalCount + " 个习惯";
+        elements.progressIndicator.style.setProperty("--progress", completionPercent + "%");
+        elements.statusCopy.textContent = allDone
+          ? "今天的习惯全部完成，真不错！"
+          : totalCount
+            ? "再完成 " + (totalCount - completedCount) + " 项，就全部打卡啦"
+            : "添加第一个习惯，开启今天的进度";
+
+        elements.historySummary.setAttribute("aria-label", "当前连续完成 " + streak + " 天，最近 7 天有 " + completedDays + " 天全部完成");
+        elements.historySummary.innerHTML = [
+          '<div class="history-stat"><span aria-hidden="true">↗</span><span>当前连续</span><strong>',
+          streak,
+          '</strong><span>天</span></div>',
+          '<div class="history-stat"><span aria-hidden="true">✓</span><span>近 7 天</span><strong>',
+          completedDays,
+          '</strong><span>/ 7</span></div>',
+        ].join("");
+        elements.historyStrip.innerHTML = recentOverview
+          .map((day) => {
+            const label = getHistoryDayLabel(day.dateKey);
+            const status = day.totalCount === 0 ? "无习惯" : day.state === "empty" ? "未完成 0/" + day.totalCount : "完成 " + day.completedCount + "/" + day.totalCount;
+            return [
+              '<li class="history-day">',
+              '<span class="history-day-label">',
+              label,
+              '</span>',
+              '<span class="history-day-dot" data-state="',
+              day.state,
+              '" title="',
+              label,
+              "：",
+              status,
+              '" aria-hidden="true"></span>',
+              '<span class="sr-only">',
+              label,
+              "：",
+              status,
+              '</span>',
+              '</li>',
+            ].join("");
+          })
+          .join("");
+
+        renderHabits(completedIds);
+      }
+
+      function renderHabits(completedIds) {
+        if (store.habits.length === 0) {
+          elements.habitSurface.innerHTML = [
+            '<div class="empty-habits">',
+            '<div>',
+            '<div class="empty-symbol" aria-hidden="true">✓</div>',
+            '<h3>还没有习惯</h3>',
+            '<p>从一件容易做到的小事开始，完成后就在这里打个勾。</p>',
+            '</div>',
+            '</div>',
+          ].join("");
+          return;
+        }
+
+        elements.habitSurface.innerHTML = '<ul class="habit-list" aria-label="今天的习惯"></ul>';
+        const list = elements.habitSurface.querySelector(".habit-list");
+
+        for (const habit of store.habits) {
+          const isCompleted = completedIds.has(habit.id);
+          const row = document.createElement("li");
+          row.className = "habit-row";
+          row.dataset.completed = String(isCompleted);
+
+          if (editingId === habit.id) {
+            row.innerHTML = [
+              '<input class="habit-checkbox" type="checkbox" ',
+              isCompleted ? "checked" : "",
+              ' aria-label="',
+              isCompleted ? "取消完成" : "标记完成",
+              "：",
+              escapeHtml(habit.name),
+              '" />',
+              '<input class="edit-input" value="',
+              escapeHtml(habit.name),
+              '" aria-label="编辑习惯：',
+              escapeHtml(habit.name),
+              '" maxlength="31" />',
+              '<div class="row-actions">',
+              '<button class="icon-button save-edit" type="button" aria-label="保存习惯：',
+              escapeHtml(habit.name),
+              '">✓</button>',
+              '<button class="icon-button cancel-edit" type="button" aria-label="取消编辑">×</button>',
+              '</div>',
+            ].join("");
+            row.querySelector(".edit-input").focus();
+          } else {
+            row.innerHTML = [
+              '<input class="habit-checkbox" type="checkbox" ',
+              isCompleted ? "checked" : "",
+              ' aria-label="',
+              isCompleted ? "取消完成" : "标记完成",
+              "：",
+              escapeHtml(habit.name),
+              '" />',
+              '<span class="habit-name">',
+              escapeHtml(habit.name),
+              '</span>',
+              '<div class="row-actions">',
+              '<button class="icon-button start-edit" type="button" aria-label="编辑习惯：',
+              escapeHtml(habit.name),
+              '">✎</button>',
+              '<button class="icon-button delete-habit" type="button" aria-label="删除习惯：',
+              escapeHtml(habit.name),
+              '">×</button>',
+              '</div>',
+            ].join("");
+          }
+
+          row.querySelector(".habit-checkbox").addEventListener("change", (event) => {
+            const ids = new Set(getCompletedIds(todayKey));
+            if (event.currentTarget.checked) ids.add(habit.id);
+            else ids.delete(habit.id);
+            store.history = { ...store.history, [todayKey]: [...ids] };
+            saveStore();
+            render();
+          });
+          row.querySelector(".start-edit")?.addEventListener("click", () => {
+            editingId = habit.id;
+            render();
+          });
+          row.querySelector(".cancel-edit")?.addEventListener("click", () => {
+            editingId = null;
+            render();
+          });
+          row.querySelector(".save-edit")?.addEventListener("click", () => saveEdit(habit.id, row));
+          row.querySelector(".edit-input")?.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") saveEdit(habit.id, row);
+            if (event.key === "Escape") {
+              editingId = null;
+              render();
+            }
+          });
+          row.querySelector(".delete-habit")?.addEventListener("click", () => {
+            if (!confirm("删除“" + habit.name + "”？\n删除后，这个习惯的历史完成记录也会一并移除。")) return;
+            store.habits = store.habits.filter((item) => item.id !== habit.id);
+            store.history = Object.fromEntries(Object.entries(store.history).map(([dateKey, ids]) => [dateKey, ids.filter((id) => id !== habit.id)]));
+            saveStore();
+            render();
+          });
+
+          list.append(row);
+        }
+      }
+
+      function saveEdit(habitId, row) {
+        const input = row.querySelector(".edit-input");
+        const error = getNameError(input.value, habitId);
+        if (error) {
+          alert(error);
+          return;
+        }
+        store.habits = store.habits.map((habit) => habit.id === habitId ? { ...habit, name: input.value.trim() } : habit);
+        editingId = null;
+        saveStore();
+        render();
+      }
+
+      function escapeHtml(value) {
+        return value.replace(/[&<>"']/g, (character) => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#039;",
+        })[character]);
+      }
+
+      elements.addForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const error = getNameError(elements.newHabitName.value);
+        elements.newHabitError.textContent = error;
+        elements.newHabitError.style.display = error ? "block" : "none";
+        elements.newHabitName.setAttribute("aria-invalid", String(Boolean(error)));
+        if (error) return;
+
+        store.habits = [...store.habits, {
+          id: makeHabitId(),
+          name: elements.newHabitName.value.trim(),
+          createdAt: new Date().toISOString(),
+        }];
+        elements.newHabitName.value = "";
+        saveStore();
+        render();
+      });
+
+      window.addEventListener("focus", render);
+      setInterval(render, 60 * 1000);
+      render();
+    </script>
+  </body>
+</html>
+`;
+
+await rm(outputDir, { force: true, recursive: true });
+await mkdir(outputDir, { recursive: true });
+await writeFile(new URL('index.html', outputDir), html);

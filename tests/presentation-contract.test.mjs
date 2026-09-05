@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ts from 'typescript';
@@ -160,4 +161,20 @@ test('page keeps the compact Chinese history surface', () => {
   assert.match(page, /近 7 天/);
   assert.match(page, /最近 7 天完成概览/);
   assert.match(page, /每天自动记录历史/);
+});
+
+test('netlify static build emits a deployable habit tracker page', () => {
+  execFileSync('node', ['scripts/build-netlify-static.mjs'], {
+    cwd: new URL('..', import.meta.url),
+    stdio: 'pipe',
+  });
+
+  const html = readFileSync(
+    new URL('../netlify-dist/index.html', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(html, /<title>好习惯｜一天一点，慢慢变好<\/title>/);
+  assert.match(html, /最近 7 天完成概览/);
+  assert.match(html, /good-habits:v1/);
 });
