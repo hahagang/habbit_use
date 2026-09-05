@@ -299,13 +299,13 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen overflow-hidden bg-background text-foreground">
-      <div className="pointer-events-none fixed inset-x-0 top-0 h-[430px] bg-[radial-gradient(circle_at_15%_0%,oklch(0.91_0.06_145/0.68),transparent_38%),radial-gradient(circle_at_88%_8%,oklch(0.95_0.045_85/0.82),transparent_38%)]" />
+    <main className="habit-app min-h-screen bg-background text-foreground">
+      <div className="hidden" />
 
-      <div className="relative mx-auto w-full max-w-5xl px-5 pb-12 pt-7 sm:px-8 sm:pt-10 lg:px-10">
-        <header className="flex items-center justify-between">
+      <div className="app-shell">
+        <header className="app-header">
           <div className="flex items-center gap-3">
-            <div className="grid size-10 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[0_8px_24px_oklch(0.48_0.12_150/0.20)]">
+            <div className="brand-mark grid size-10 place-items-center bg-primary text-primary-foreground">
               <Leaf className="size-5" strokeWidth={2.2} aria-hidden="true" />
             </div>
             <div>
@@ -313,37 +313,37 @@ export default function Home() {
               <p className="text-xs text-muted-foreground">一天一点，慢慢变好</p>
             </div>
           </div>
-          <p className="rounded-full border border-white/80 bg-white/50 px-3.5 py-2 text-sm font-medium text-foreground/70 shadow-sm backdrop-blur-sm">
+          <p className="date-label">
             {dateLabel}
           </p>
         </header>
 
-        <div className="mt-12 grid items-start gap-7 lg:mt-20 lg:grid-cols-[0.78fr_1.35fr] lg:gap-12">
-          <section className="lg:sticky lg:top-10">
+        <div className="workspace">
+          <section className="daily-overview">
             <p className="text-sm font-medium text-primary">今天，也在认真生活</p>
-            <h1 className="mt-3 max-w-md text-4xl font-semibold leading-[1.12] tracking-[-0.04em] sm:text-5xl">
+            <h1 className="overview-title">
               把想坚持的小事，
-              <span className="text-primary">一件件完成。</span>
+              <span className="block">一件件完成。</span>
             </h1>
-            <p className="mt-5 max-w-sm text-[15px] leading-7 text-muted-foreground">
+            <p className="overview-description">
               不用追求完美，只要今天比昨天多走一小步。
             </p>
 
-            <Card className="mt-8 gap-0 rounded-[28px] border-0 bg-[oklch(0.36_0.075_150)] py-0 text-white shadow-[0_24px_60px_oklch(0.30_0.06_150/0.18)] ring-0">
-              <CardContent className="px-6 py-6 sm:px-7 sm:py-7">
+            <Card className="daily-progress gap-0 py-0 ring-0">
+              <CardContent className="p-6">
                 <div className="flex items-end justify-between gap-4">
                   <div>
-                    <p className="text-sm text-white/65">今日完成</p>
+                    <p className="text-sm text-muted-foreground">今日完成</p>
                     <p className="mt-2 flex items-baseline gap-2">
-                      <span className="text-5xl font-semibold tabular-nums tracking-tight">
+                      <span className="progress-count">
                         {completedCount}
                       </span>
-                      <span className="text-base text-white/60">/ {store.habits.length} 项</span>
+                      <span className="text-base text-muted-foreground">/ {store.habits.length} 项</span>
                     </p>
                   </div>
                   <div
-                    className={`grid size-12 place-items-center rounded-full transition-all duration-300 ${
-                      allDone ? 'scale-100 bg-white text-primary' : 'bg-white/10 text-white/65'
+                    className={`grid size-10 place-items-center rounded-full transition-colors duration-200 ${
+                      allDone ? 'bg-primary text-primary-foreground' : 'bg-secondary text-primary'
                     }`}
                     aria-hidden="true"
                   >
@@ -353,9 +353,9 @@ export default function Home() {
                 <Progress
                   value={completionPercent}
                   aria-label={`今日完成进度 ${completionPercent}%`}
-                  className="mt-6 [&_[data-slot=progress-indicator]]:bg-white [&_[data-slot=progress-track]]:h-2 [&_[data-slot=progress-track]]:bg-white/15"
+                  className="mt-5 [&_[data-slot=progress-indicator]]:bg-primary [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-track]]:bg-secondary"
                 />
-                <p className="mt-3 text-xs text-white/60" aria-live="polite">
+                <p className="mt-4 text-sm leading-6 text-muted-foreground" aria-live="polite">
                   {allDone
                     ? '今天的习惯全部完成，真不错！'
                     : store.habits.length
@@ -367,11 +367,11 @@ export default function Home() {
           </section>
 
           <section aria-labelledby="habit-list-title">
-            <Card className="gap-0 overflow-visible rounded-[30px] border border-white/90 bg-card/92 py-0 shadow-[0_24px_70px_oklch(0.33_0.04_120/0.09)] ring-0 backdrop-blur-sm">
-              <CardContent className="px-5 py-6 sm:px-7 sm:py-7">
+            <Card className="habit-panel gap-0 py-0 ring-0">
+              <CardContent className="panel-content">
                 <div className="flex items-end justify-between gap-4">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                    <p className="text-sm font-medium text-muted-foreground">
                       Today
                     </p>
                     <h2 id="habit-list-title" className="mt-1 text-2xl font-semibold tracking-tight">
@@ -409,12 +409,12 @@ export default function Home() {
                       aria-label="新的习惯名称"
                       aria-invalid={Boolean(newHabitError)}
                       aria-describedby={newHabitError ? 'new-habit-error' : undefined}
-                      className="h-12 rounded-2xl border-border/80 bg-white/70 px-4 text-base shadow-inner shadow-black/[0.015] placeholder:text-muted-foreground/65 focus-visible:border-primary focus-visible:ring-primary/15"
+                      className="habit-input h-12 min-w-0 rounded-lg border-border bg-background px-3.5 text-base shadow-none placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/15"
                     />
                     <Button
                       type="submit"
                       size="lg"
-                      className="h-12 rounded-2xl px-4 shadow-[0_8px_22px_oklch(0.50_0.13_150/0.18)] sm:px-5"
+                      className="add-habit h-12 shrink-0 rounded-lg px-4 text-sm font-medium sm:px-5"
                     >
                       <Plus className="size-4.5" aria-hidden="true" />
                       <span className="hidden sm:inline">添加习惯</span>
@@ -438,9 +438,9 @@ export default function Home() {
 
                 <div className="mt-6" aria-busy={!isHydrated}>
                   {store.habits.length === 0 ? (
-                    <div className="grid min-h-64 place-items-center rounded-[24px] border border-dashed border-border bg-secondary/35 px-6 py-10 text-center">
+                    <div className="empty-habits grid place-items-center px-6 text-center">
                       <div>
-                        <div className="mx-auto grid size-14 place-items-center rounded-full bg-secondary text-primary">
+                        <div className="empty-symbol mx-auto grid size-14 place-items-center rounded-2xl text-primary">
                           <CheckCircle2 className="size-6" aria-hidden="true" />
                         </div>
                         <h3 className="mt-4 text-base font-semibold">还没有习惯</h3>
@@ -450,7 +450,7 @@ export default function Home() {
                       </div>
                     </div>
                   ) : (
-                    <ul className="space-y-3" aria-label="今天的习惯">
+                    <ul className="habit-list" aria-label="今天的习惯">
                       {store.habits.map((habit) => {
                         const isCompleted = completedIds.has(habit.id);
                         const isEditing = editingId === habit.id;
@@ -459,14 +459,14 @@ export default function Home() {
                           <li
                             key={habit.id}
                             data-completed={isCompleted}
-                            className="habit-row group rounded-[22px] border border-border/70 bg-white/70 px-4 py-3.5 transition-all duration-200 hover:border-primary/25 hover:bg-white hover:shadow-[0_10px_28px_oklch(0.35_0.04_130/0.07)] data-[completed=true]:border-primary/15 data-[completed=true]:bg-primary/[0.055]"
+                            className="habit-row group"
                           >
                             <div className="flex min-h-9 items-center gap-3.5">
                               <Checkbox
                                 checked={isCompleted}
                                 onCheckedChange={(checked) => toggleHabit(habit.id, checked === true)}
                                 aria-label={`${isCompleted ? '取消完成' : '标记完成'}：${habit.name}`}
-                                className="size-5 rounded-md border-primary/35 data-checked:animate-[habit-pop_180ms_ease-out] [&_[data-slot=checkbox-indicator]>svg]:size-4"
+                                className="size-6 rounded-lg border-input data-checked:animate-[habit-pop_180ms_ease-out] [&_[data-slot=checkbox-indicator]>svg]:size-4"
                               />
 
                               {isEditing ? (
@@ -538,7 +538,7 @@ export default function Home() {
                                       size="icon"
                                       onClick={() => beginEditing(habit)}
                                       aria-label={`编辑习惯：${habit.name}`}
-                                      className="rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                                      className="rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
                                     >
                                       <Pencil />
                                     </Button>
@@ -550,7 +550,7 @@ export default function Home() {
                                             variant="ghost"
                                             size="icon"
                                             aria-label={`删除习惯：${habit.name}`}
-                                            className="rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                                            className="rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                                           />
                                         }
                                       >
@@ -587,7 +587,7 @@ export default function Home() {
               </CardContent>
             </Card>
 
-            <p className="mt-4 text-center text-xs leading-5 text-muted-foreground/75">
+            <p className="privacy-note">
               数据只保存在当前浏览器 · 每天自动开始新一轮
             </p>
           </section>
