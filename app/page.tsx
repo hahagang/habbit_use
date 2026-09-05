@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
+  CalendarCheck2,
   Check,
   CheckCircle2,
   Leaf,
   Pencil,
   Plus,
+  TrendingUp,
   Trash2,
   X,
 } from 'lucide-react';
@@ -27,58 +29,22 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
-
-type Habit = {
-  id: string;
-  name: string;
-  createdAt: string;
-};
-
-type HabitStoreV1 = {
-  version: 1;
-  habits: Habit[];
-  completionDate: string;
-  completedHabitIds: string[];
-};
+import {
+  type Habit,
+  type HabitStore,
+  createEmptyStore,
+  getCompletedHabitIdsForDate,
+  getCurrentStreak,
+  getDateFromKey,
+  getLocalDateKey,
+  getRecentCompletionOverview,
+  normalizeHabitStore,
+  removeHabitFromHistory,
+  setHabitCompletionForDate,
+} from '@/lib/habit-history';
 
 const STORAGE_KEY = 'good-habits:v1';
 const MAX_NAME_LENGTH = 30;
-
-function getLocalDateKey(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function createEmptyStore(): HabitStoreV1 {
-  return {
-    version: 1,
-    habits: [],
-    completionDate: getLocalDateKey(),
-    completedHabitIds: [],
-  };
-}
-
-function isValidStore(value: unknown): value is HabitStoreV1 {
-  if (!value || typeof value !== 'object') return false;
-
-  const store = value as Partial<HabitStoreV1>;
-  return (
-    store.version === 1 &&
-    typeof store.completionDate === 'string' &&
-    Array.isArray(store.habits) &&
-    store.habits.every(
-      (habit) =>
-        habit &&
-        typeof habit.id === 'string' &&
-        typeof habit.name === 'string' &&
-        typeof habit.createdAt === 'string',
-    ) &&
-    Array.isArray(store.completedHabitIds) &&
-    store.completedHabitIds.every((id) => typeof id === 'string')
-  );
-}
 
 function normalizeName(name: string) {
   return name.trim().toLocaleLowerCase('zh-CN');
@@ -106,8 +72,23 @@ function makeHabitId() {
   return `habit-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+const historyDayFormatter = new Intl.DateTimeFormat('zh-CN', {
+  weekday: 'short',
+});
+
+function getHistoryDayLabel(dateKey: string, todayKey: string) {
+  if (dateKey === todayKey) return '今天';
+
+  const yesterday = getDateFromKey(todayKey);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (dateKey === getLocalDateKey(yesterday)) return '昨天';
+
+  return historyDayFormatter.format(getDateFromKey(dateKey));
+}
+
 export default function Home() {
-  const [store, setStore] = useState<HabitStoreV1>(createEmptyStore);
+  const [store, setStore] = useState<HabitStore>(createEmptyStore);
+  const [todayKey, setTodayKey] = useState(() => getLocalDateKey());
   const [isHydrated, setIsHydrated] = useState(false);
   const [newHabitName, setNewHabitName] = useState('');
   const [newHabitError, setNewHabitError] = useState('');
@@ -118,45 +99,36 @@ export default function Home() {
   const editInputRef = useRef<HTMLInputElement>(null);
 
   const refreshForToday = useCallback(() => {
-    const today = getLocalDateKey();
-    setStore((currentStore) =>
-      currentStore.completionDate === today
-        ? currentStore
-        : {
-            ...currentStore,
-            completionDate: today,
-            completedHabitIds: [],
-          },
-    );
+    setTodayKey(getLocalDateKey());
   }, []);
 
   useEffect(() => {
-    const today = getLocalDateKey();
+    let isCancelled = false;
 
-    try {
-      const savedValue = window.localStorage.getItem(STORAGE_KEY);
-      if (!savedValue) {
+    const hydrationTimer = window.setTimeout(() => {
+      if (isCancelled) return;
+
+      try {
+        const savedValue = window.localStorage.getItem(STORAGE_KEY);
+        setTodayKey(getLocalDateKey());
+        if (!savedValue) {
+          setStore(createEmptyStore());
+        } else {
+          const parsedValue: unknown = JSON.parse(savedValue);
+          setStore(normalizeHabitStore(parsedValue));
+        }
+      } catch {
         setStore(createEmptyStore());
-      } else {
-        const parsedValue: unknown = JSON.parse(savedValue);
-        if (!isValidStore(parsedValue)) throw new Error('Invalid habit store');
-
-        const validHabitIds = new Set(parsedValue.habits.map((habit) => habit.id));
-        setStore({
-          ...parsedValue,
-          completionDate: today,
-          completedHabitIds:
-            parsedValue.completionDate === today
-              ? parsedValue.completedHabitIds.filter((id) => validHabitIds.has(id))
-              : [],
-        });
+        setStorageWarning('本地数据无法读取，已为你开启一个新的列表。');
+      } finally {
+        setIsHydrated(true);
       }
-    } catch {
-      setStore(createEmptyStore());
-      setStorageWarning('本地数据无法读取，已为你开启一个新的列表。');
-    } finally {
-      setIsHydrated(true);
-    }
+    }, 0);
+
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(hydrationTimer);
+    };
   }, []);
 
   useEffect(() => {
@@ -165,7 +137,9 @@ export default function Home() {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
     } catch {
-      setStorageWarning('当前更改暂时只能保留在本页，刷新后可能会丢失。');
+      window.setTimeout(() => {
+        setStorageWarning('当前更改暂时只能保留在本页，刷新后可能会丢失。');
+      }, 0);
     }
   }, [isHydrated, store]);
 
@@ -205,9 +179,13 @@ export default function Home() {
     if (editingId) editInputRef.current?.focus();
   }, [editingId]);
 
+  const todayCompletedHabitIds = useMemo(
+    () => getCompletedHabitIdsForDate(store, todayKey),
+    [store, todayKey],
+  );
   const completedIds = useMemo(
-    () => new Set(store.completedHabitIds),
-    [store.completedHabitIds],
+    () => new Set(todayCompletedHabitIds),
+    [todayCompletedHabitIds],
   );
   const completedCount = store.habits.reduce(
     (count, habit) => count + (completedIds.has(habit.id) ? 1 : 0),
@@ -216,15 +194,27 @@ export default function Home() {
   const completionPercent = store.habits.length
     ? Math.round((completedCount / store.habits.length) * 100)
     : 0;
-  const allDone = store.habits.length > 0 && completedCount === store.habits.length;
+  const allDone =
+    store.habits.length > 0 && completedCount === store.habits.length;
+  const currentStreak = useMemo(
+    () => getCurrentStreak(store, todayKey),
+    [store, todayKey],
+  );
+  const recentOverview = useMemo(
+    () => getRecentCompletionOverview(store, todayKey),
+    [store, todayKey],
+  );
+  const completedDaysInRecentOverview = recentOverview.filter(
+    (day) => day.state === 'complete',
+  ).length;
   const dateLabel = new Intl.DateTimeFormat('zh-CN', {
     month: 'long',
     day: 'numeric',
     weekday: 'long',
-  }).format(new Date());
+  }).format(getDateFromKey(todayKey));
 
   const addHabit = () => {
-    refreshForToday();
+    setTodayKey(getLocalDateKey());
     const error = getNameError(newHabitName, store.habits);
     if (error) {
       setNewHabitError(error);
@@ -245,17 +235,11 @@ export default function Home() {
   };
 
   const toggleHabit = (habitId: string, checked: boolean) => {
-    refreshForToday();
-    setStore((currentStore) => {
-      const nextCompletedIds = new Set(currentStore.completedHabitIds);
-      if (checked) nextCompletedIds.add(habitId);
-      else nextCompletedIds.delete(habitId);
-
-      return {
-        ...currentStore,
-        completedHabitIds: [...nextCompletedIds],
-      };
-    });
+    const dateKey = getLocalDateKey();
+    setTodayKey(dateKey);
+    setStore((currentStore) =>
+      setHabitCompletionForDate(currentStore, dateKey, habitId, checked),
+    );
   };
 
   const beginEditing = (habit: Habit) => {
@@ -288,13 +272,15 @@ export default function Home() {
   };
 
   const deleteHabit = (habitId: string) => {
-    setStore((currentStore) => ({
-      ...currentStore,
-      habits: currentStore.habits.filter((habit) => habit.id !== habitId),
-      completedHabitIds: currentStore.completedHabitIds.filter(
-        (completedId) => completedId !== habitId,
+    setStore((currentStore) =>
+      removeHabitFromHistory(
+        {
+          ...currentStore,
+          habits: currentStore.habits.filter((habit) => habit.id !== habitId),
+        },
+        habitId,
       ),
-    }));
+    );
     if (editingId === habitId) cancelEditing();
   };
 
@@ -310,17 +296,19 @@ export default function Home() {
             </div>
             <div>
               <p className="text-[17px] font-semibold tracking-tight">好习惯</p>
-              <p className="text-xs text-muted-foreground">一天一点，慢慢变好</p>
+              <p className="text-xs text-muted-foreground">
+                一天一点，慢慢变好
+              </p>
             </div>
           </div>
-          <p className="date-label">
-            {dateLabel}
-          </p>
+          <p className="date-label">{dateLabel}</p>
         </header>
 
         <div className="workspace">
           <section className="daily-overview">
-            <p className="section-kicker text-sm font-medium text-primary">今天，也在认真生活</p>
+            <p className="section-kicker text-sm font-medium text-primary">
+              今天，也在认真生活
+            </p>
             <h1 className="overview-title">
               把想坚持的小事，
               <span className="block">一件件完成。</span>
@@ -335,15 +323,17 @@ export default function Home() {
                   <div>
                     <p className="text-sm text-muted-foreground">今日完成</p>
                     <p className="mt-2 flex items-baseline gap-2">
-                      <span className="progress-count">
-                        {completedCount}
+                      <span className="progress-count">{completedCount}</span>
+                      <span className="text-base text-muted-foreground">
+                        / {store.habits.length} 项
                       </span>
-                      <span className="text-base text-muted-foreground">/ {store.habits.length} 项</span>
                     </p>
                   </div>
                   <div
                     className={`stat-orb grid size-10 place-items-center rounded-full transition-colors duration-200 ${
-                      allDone ? 'bg-primary text-primary-foreground' : 'bg-secondary text-primary'
+                      allDone
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-primary'
                     }`}
                     aria-hidden="true"
                   >
@@ -355,13 +345,63 @@ export default function Home() {
                   aria-label={`今日完成进度 ${completionPercent}%`}
                   className="mt-5 [&_[data-slot=progress-indicator]]:bg-primary [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-track]]:bg-secondary"
                 />
-                <p className="mt-4 text-sm leading-6 text-muted-foreground" aria-live="polite">
+                <p
+                  className="mt-4 text-sm leading-6 text-muted-foreground"
+                  aria-live="polite"
+                >
                   {allDone
                     ? '今天的习惯全部完成，真不错！'
                     : store.habits.length
                       ? `再完成 ${store.habits.length - completedCount} 项，就全部打卡啦`
                       : '添加第一个习惯，开启今天的进度'}
                 </p>
+
+                <div
+                  className="history-summary"
+                  aria-label={`当前连续完成 ${currentStreak} 天，最近 7 天有 ${completedDaysInRecentOverview} 天全部完成`}
+                >
+                  <div className="history-stat">
+                    <TrendingUp className="size-4" aria-hidden="true" />
+                    <span>当前连续</span>
+                    <strong>{currentStreak}</strong>
+                    <span>天</span>
+                  </div>
+                  <div className="history-stat">
+                    <CalendarCheck2 className="size-4" aria-hidden="true" />
+                    <span>近 7 天</span>
+                    <strong>{completedDaysInRecentOverview}</strong>
+                    <span>/ 7</span>
+                  </div>
+                </div>
+
+                <ol className="history-strip" aria-label="最近 7 天完成概览">
+                  {recentOverview.map((day) => {
+                    const dayLabel = getHistoryDayLabel(day.dateKey, todayKey);
+                    const statusLabel =
+                      day.totalCount === 0
+                        ? '无习惯'
+                        : day.state === 'complete'
+                          ? `完成 ${day.completedCount}/${day.totalCount}`
+                          : day.state === 'partial'
+                            ? `完成 ${day.completedCount}/${day.totalCount}`
+                            : `未完成 0/${day.totalCount}`;
+
+                    return (
+                      <li key={day.dateKey} className="history-day">
+                        <span className="history-day-label">{dayLabel}</span>
+                        <span
+                          className="history-day-dot"
+                          data-state={day.state}
+                          aria-hidden="true"
+                          title={`${dayLabel}：${statusLabel}`}
+                        />
+                        <span className="sr-only">
+                          {dayLabel}：{statusLabel}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
               </CardContent>
             </Card>
           </section>
@@ -374,7 +414,10 @@ export default function Home() {
                     <p className="text-sm font-medium text-muted-foreground">
                       Today
                     </p>
-                    <h2 id="habit-list-title" className="mt-1 text-2xl font-semibold tracking-tight">
+                    <h2
+                      id="habit-list-title"
+                      className="mt-1 text-2xl font-semibold tracking-tight"
+                    >
                       今日习惯
                     </h2>
                   </div>
@@ -399,7 +442,10 @@ export default function Home() {
                         if (newHabitError) setNewHabitError('');
                       }}
                       onKeyDown={(event) => {
-                        if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                        if (
+                          event.key === 'Enter' &&
+                          !event.nativeEvent.isComposing
+                        ) {
                           event.preventDefault();
                           addHabit();
                         }
@@ -408,7 +454,9 @@ export default function Home() {
                       placeholder="例如：喝水、运动、读书"
                       aria-label="新的习惯名称"
                       aria-invalid={Boolean(newHabitError)}
-                      aria-describedby={newHabitError ? 'new-habit-error' : undefined}
+                      aria-describedby={
+                        newHabitError ? 'new-habit-error' : undefined
+                      }
                       className="habit-input h-12 min-w-0 rounded-lg border-border bg-background px-3.5 text-base shadow-none placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/15"
                     />
                     <Button
@@ -422,7 +470,11 @@ export default function Home() {
                     </Button>
                   </div>
                   {newHabitError && (
-                    <p id="new-habit-error" className="mt-2 flex items-center gap-1.5 text-sm text-destructive" role="alert">
+                    <p
+                      id="new-habit-error"
+                      className="mt-2 flex items-center gap-1.5 text-sm text-destructive"
+                      role="alert"
+                    >
                       <AlertCircle className="size-3.5" aria-hidden="true" />
                       {newHabitError}
                     </p>
@@ -430,10 +482,16 @@ export default function Home() {
                 </form>
 
                 {storageWarning && (
-                  <div className="storage-warning mt-4 flex items-start gap-2 rounded-2xl bg-amber-50 px-3.5 py-3 text-sm leading-5 text-amber-900" role="status">
-                    <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                  <output
+                    className="storage-warning mt-4 flex items-start gap-2 rounded-2xl bg-amber-50 px-3.5 py-3 text-sm leading-5 text-amber-900"
+                    aria-live="polite"
+                  >
+                    <AlertCircle
+                      className="mt-0.5 size-4 shrink-0"
+                      aria-hidden="true"
+                    />
                     <span>{storageWarning}</span>
-                  </div>
+                  </output>
                 )}
 
                 <div className="mt-6" aria-busy={!isHydrated}>
@@ -443,7 +501,9 @@ export default function Home() {
                         <div className="empty-symbol mx-auto grid size-14 place-items-center rounded-2xl text-primary">
                           <CheckCircle2 className="size-6" aria-hidden="true" />
                         </div>
-                        <h3 className="mt-4 text-base font-semibold">还没有习惯</h3>
+                        <h3 className="mt-4 text-base font-semibold">
+                          还没有习惯
+                        </h3>
                         <p className="mx-auto mt-1 max-w-xs text-sm leading-6 text-muted-foreground">
                           从一件容易做到的小事开始，完成后就在这里打个勾。
                         </p>
@@ -464,7 +524,9 @@ export default function Home() {
                             <div className="flex min-h-9 items-center gap-3.5">
                               <Checkbox
                                 checked={isCompleted}
-                                onCheckedChange={(checked) => toggleHabit(habit.id, checked === true)}
+                                onCheckedChange={(checked) =>
+                                  toggleHabit(habit.id, checked === true)
+                                }
                                 aria-label={`${isCompleted ? '取消完成' : '标记完成'}：${habit.name}`}
                                 className="size-6 rounded-lg border-input data-checked:animate-[habit-pop_180ms_ease-out] [&_[data-slot=checkbox-indicator]>svg]:size-4"
                               />
@@ -483,7 +545,8 @@ export default function Home() {
                                         event.preventDefault();
                                         saveEditing();
                                       }
-                                      if (event.key === 'Escape') cancelEditing();
+                                      if (event.key === 'Escape')
+                                        cancelEditing();
                                     }}
                                     maxLength={MAX_NAME_LENGTH + 1}
                                     aria-label={`编辑习惯：${habit.name}`}
@@ -491,7 +554,10 @@ export default function Home() {
                                     className="h-9 rounded-xl bg-card"
                                   />
                                   {editingError && (
-                                    <p className="mt-1 text-xs text-destructive" role="alert">
+                                    <p
+                                      className="mt-1 text-xs text-destructive"
+                                      role="alert"
+                                    >
                                       {editingError}
                                     </p>
                                   )}
@@ -499,7 +565,9 @@ export default function Home() {
                               ) : (
                                 <span
                                   className={`min-w-0 flex-1 truncate text-[15px] font-medium transition-all ${
-                                    isCompleted ? 'text-muted-foreground line-through decoration-primary/45' : ''
+                                    isCompleted
+                                      ? 'text-muted-foreground line-through decoration-primary/45'
+                                      : ''
                                   }`}
                                 >
                                   {habit.name}
@@ -558,16 +626,22 @@ export default function Home() {
                                       </AlertDialogTrigger>
                                       <AlertDialogContent>
                                         <AlertDialogHeader>
-                                          <AlertDialogTitle>删除“{habit.name}”？</AlertDialogTitle>
+                                          <AlertDialogTitle>
+                                            删除“{habit.name}”？
+                                          </AlertDialogTitle>
                                           <AlertDialogDescription>
-                                            删除后，这个习惯今天的完成状态也会一并移除。
+                                            删除后，这个习惯的历史完成记录也会一并移除。
                                           </AlertDialogDescription>
                                         </AlertDialogHeader>
                                         <AlertDialogFooter>
-                                          <AlertDialogCancel>取消</AlertDialogCancel>
+                                          <AlertDialogCancel>
+                                            取消
+                                          </AlertDialogCancel>
                                           <AlertDialogCancel
                                             variant="destructive"
-                                            onClick={() => deleteHabit(habit.id)}
+                                            onClick={() =>
+                                              deleteHabit(habit.id)
+                                            }
                                           >
                                             删除
                                           </AlertDialogCancel>
@@ -588,7 +662,7 @@ export default function Home() {
             </Card>
 
             <p className="privacy-note">
-              数据只保存在当前浏览器 · 每天自动开始新一轮
+              数据只保存在当前浏览器 · 每天自动记录历史
             </p>
           </section>
         </div>
