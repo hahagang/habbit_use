@@ -304,7 +304,7 @@ export default function Home() {
 
       <div className="app-shell">
         <header className="app-header">
-          <div className="flex items-center gap-3">
+          <div className="brand-block flex items-center gap-3">
             <div className="brand-mark grid size-10 place-items-center bg-primary text-primary-foreground">
               <Leaf className="size-5" strokeWidth={2.2} aria-hidden="true" />
             </div>
@@ -320,7 +320,7 @@ export default function Home() {
 
         <div className="workspace">
           <section className="daily-overview">
-            <p className="text-sm font-medium text-primary">今天，也在认真生活</p>
+            <p className="section-kicker text-sm font-medium text-primary">今天，也在认真生活</p>
             <h1 className="overview-title">
               把想坚持的小事，
               <span className="block">一件件完成。</span>
@@ -342,7 +342,7 @@ export default function Home() {
                     </p>
                   </div>
                   <div
-                    className={`grid size-10 place-items-center rounded-full transition-colors duration-200 ${
+                    className={`stat-orb grid size-10 place-items-center rounded-full transition-colors duration-200 ${
                       allDone ? 'bg-primary text-primary-foreground' : 'bg-secondary text-primary'
                     }`}
                     aria-hidden="true"
@@ -391,7 +391,7 @@ export default function Home() {
                   }}
                   noValidate
                 >
-                  <div className="flex gap-2.5">
+                  <div className="add-row flex gap-2.5">
                     <Input
                       value={newHabitName}
                       onChange={(event) => {
@@ -430,7 +430,7 @@ export default function Home() {
                 </form>
 
                 {storageWarning && (
-                  <div className="mt-4 flex items-start gap-2 rounded-2xl bg-amber-50 px-3.5 py-3 text-sm leading-5 text-amber-900" role="status">
+                  <div className="storage-warning mt-4 flex items-start gap-2 rounded-2xl bg-amber-50 px-3.5 py-3 text-sm leading-5 text-amber-900" role="status">
                     <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                     <span>{storageWarning}</span>
                   </div>
@@ -488,7 +488,7 @@ export default function Home() {
                                     maxLength={MAX_NAME_LENGTH + 1}
                                     aria-label={`编辑习惯：${habit.name}`}
                                     aria-invalid={Boolean(editingError)}
-                                    className="h-9 rounded-xl bg-white"
+                                    className="h-9 rounded-xl bg-card"
                                   />
                                   {editingError && (
                                     <p className="mt-1 text-xs text-destructive" role="alert">
